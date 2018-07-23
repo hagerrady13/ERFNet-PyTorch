@@ -7,7 +7,7 @@ import torch
 from torch.backends import cudnn
 from torch.autograd import Variable
 
-from graphs.models.erfnet import ERFNet
+from graphs.models.erfnet import ERF
 from graphs.models.erfnet_imagenet import ERFNet
 from datasets.voc2012 import VOCDataLoader
 from graphs.losses.loss import CrossEntropyLoss2d
@@ -17,7 +17,6 @@ from torch.optim import lr_scheduler
 from tensorboardX import SummaryWriter
 from utils.metrics import AverageMeter, IOUMetric
 from utils.misc import print_cuda_statistics
-from utils.training_utils import load_my_state_dict
 
 cudnn.benchmark = True
 
@@ -43,11 +42,11 @@ class ERFNetAgent:
         else:
             pretrained_enc = None
         # define erfNet model
-        self.model = ERFNet(self.config, pretrained_enc)
+        self.model = ERF(self.config, pretrained_enc)
         # Create an instance from the data loader
         self.data_loader = VOCDataLoader(self.config)
         # Create instance from the loss
-        self.loss = CrossEntropyLoss2d()
+        self.loss = torch.nn.CrossEntropyLoss(ignore_index=255, weight=None, size_average=True, reduce=True)
         # Create instance from the optimizer
         self.optimizer = torch.optim.Adam(self.model.parameters(),
                                           lr=self.config.learning_rate,
@@ -177,7 +176,8 @@ class ERFNetAgent:
         metrics = IOUMetric(self.config.num_classes)
 
         for x, y in tqdm_batch:
-
+            if self.cuda:
+                x, y = x.pin_memory().cuda(async=self.config.async_loading), y.cuda(async=self.config.async_loading)
             x, y = Variable(x), Variable(y)
             # model
             pred = self.model(x)
@@ -223,6 +223,8 @@ class ERFNetAgent:
         metrics = IOUMetric(self.config.num_classes)
 
         for x, y in tqdm_batch:
+            if self.cuda:
+                x, y = x.pin_memory().cuda(async=self.config.async_loading), y.cuda(async=self.config.async_loading)
             x, y = Variable(x), Variable(y)
             # model
             pred = self.model(x)

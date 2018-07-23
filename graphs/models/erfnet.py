@@ -12,7 +12,7 @@ from graphs.models.custom_blocks.erf_blocks import DownsamplerBlock, UpsamplerBl
 from graphs.weights_initializer import weights_init_normal
 
 
-class ERFNet(nn.Module):
+class ERF(nn.Module):
     def __init__(self, config, encoder=None):  # use encoder to pass pretrained encoder
         super().__init__()
 
