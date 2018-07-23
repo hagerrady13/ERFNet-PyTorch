@@ -1,7 +1,14 @@
 # ERFNet encoder model definition used for pretraining in ImageNet
 # Sept 2017
 # Eduardo Romera
+# A
 #######################
+"""
+ERFNet encoder model definition used for pretraining in ImageNet
+Sept 2017
+Eduardo Romera
+Taken from: https://github.com/Eromera/erfnet_pytorch/blob/master/train/erfnet_imagenet.py
+"""
 
 import torch
 import torch.nn as nn
@@ -9,6 +16,7 @@ import torch.nn.init as init
 import torch.nn.functional as F
 
 from graphs.models.custom_blocks.erf_blocks import DownsamplerBlock, non_bottleneck_1d
+
 
 class ERFNet(nn.Module):
     def __init__(self, num_classes):  # use encoder to pass pretrained encoder

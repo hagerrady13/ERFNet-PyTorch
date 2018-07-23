@@ -1,0 +1,4 @@
+"""
+Computer class weights on Pascal Voc for the weighted loss
+"""
+import numpy as np

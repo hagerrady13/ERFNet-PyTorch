@@ -110,4 +110,4 @@ data/pascal_voc_seg/
 experiments/
 
 # pretrained_weights
-pretrained_weights/vgg/
+pretrained_weights/

@@ -7,7 +7,7 @@ import torch
 from torch.backends import cudnn
 from torch.autograd import Variable
 
-from graphs.models.erfnet import ERFModel
+from graphs.models.erfnet import ERFNet
 from graphs.models.erfnet_imagenet import ERFNet
 from datasets.voc2012 import VOCDataLoader
 from graphs.losses.loss import CrossEntropyLoss2d
@@ -24,7 +24,6 @@ cudnn.benchmark = True
 """
 TODO: 
 Add Weighted loss
-Weight initialization in model
 """
 
 
@@ -37,12 +36,14 @@ class ERFNetAgent:
         self.config = config
         # Create an instance from the Model
         print("Loading encoder pretrained in imagenet...")
-        pretrainedEnc = torch.nn.DataParallel(ERFNet(self.config.imagenet_nclasses)).cuda()
-        pretrainedEnc.load_state_dict(torch.load(self.config.pretrained_model_path)['state_dict'])
-        pretrainedEnc = next(pretrainedEnc.children()).features.encoder
-
+        if self.config.pretrained_encoder:
+            pretrained_enc = torch.nn.DataParallel(ERFNet(self.config.imagenet_nclasses)).cuda()
+            pretrained_enc.load_state_dict(torch.load(self.config.pretrained_model_path)['state_dict'])
+            pretrained_enc = next(pretrained_enc.children()).features.encoder
+        else:
+            pretrained_enc = None
         # define erfNet model
-        self.model = ERFModel(self.config.num_classes, pretrainedEnc)
+        self.model = ERFNet(self.config, pretrained_enc)
         # Create an instance from the data loader
         self.data_loader = VOCDataLoader(self.config)
         # Create instance from the loss
@@ -53,6 +54,7 @@ class ERFNetAgent:
                                           betas=(self.config.betas[0], self.config.betas[1]),
                                           eps=self.config.eps,
                                           weight_decay=self.config.weight_decay)
+        # Define Scheduler
         lambda1 = lambda epoch: pow((1 - ((epoch - 1) / self.config.max_epoch)), 0.9)
         self.scheduler = lr_scheduler.LambdaLR(self.optimizer, lr_lambda=lambda1)
         # initialize my counters
@@ -131,7 +133,7 @@ class ERFNetAgent:
         This function will the operator
         :return:
         """
-        assert self.config.mode in ['train', 'test']
+        assert self.config.mode in ['train', 'test', 'random']
         try:
             if self.config.mode == 'test':
                 self.test()
@@ -172,6 +174,7 @@ class ERFNetAgent:
         self.model.train()
         # Initialize your average meters
         epoch_loss = AverageMeter()
+        metrics = IOUMetric(self.config.num_classes)
 
         for x, y in tqdm_batch:
 
@@ -189,14 +192,21 @@ class ERFNetAgent:
             self.optimizer.step()
 
             epoch_loss.update(cur_loss.item())
+            _, pred_max = torch.max(pred, 1)
+            metrics.add_batch(pred_max.data.cpu().numpy(), y.data.cpu().numpy())
 
             self.current_iteration += 1
             # exit(0)
 
-        self.summary_writer.add_scalar("epoch/loss", epoch_loss.val, self.current_iteration)
+        epoch_acc, _, epoch_iou_class, epoch_mean_iou, _ = metrics.evaluate()
+        self.summary_writer.add_scalar("epoch-training/loss", epoch_loss.val, self.current_iteration)
+        self.summary_writer.add_scalar("epoch_training/mean_iou", epoch_mean_iou, self.current_iteration)
         tqdm_batch.close()
 
-        print("Training at epoch-" + str(self.current_epoch) + " | " + "loss: " + str(epoch_loss.val))
+        print("Training Results at epoch-" + str(self.current_epoch) + " | " + "loss: " + str(
+            epoch_loss.val) + " - acc-: " + str(
+            epoch_acc) + "- mean_iou: " + str(epoch_mean_iou) + "\n iou per class: \n" + str(
+            epoch_iou_class))
 
     def validate(self):
         """
@@ -228,6 +238,9 @@ class ERFNetAgent:
             epoch_loss.update(cur_loss.item())
 
         epoch_acc, _, epoch_iou_class, epoch_mean_iou, _ = metrics.evaluate()
+        self.summary_writer.add_scalar("epoch_validation/loss", epoch_loss.val, self.current_iteration)
+        self.summary_writer.add_scalar("epoch_validation/mean_iou", epoch_mean_iou, self.current_iteration)
+
         print("Validation Results at epoch-" + str(self.current_epoch) + " | " + "loss: " + str(
             epoch_loss.val) + " - acc-: " + str(
             epoch_acc) + "- mean_iou: " + str(epoch_mean_iou) + "\n iou per class: \n" + str(

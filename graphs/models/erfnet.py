@@ -1,93 +1,84 @@
-# ERFNet full model definition for Pytorch
-# Sept 2017
-# Eduardo Romera
-#######################
-
+"""
+ERFNet Model
+July 2017
+Adapted from: https://github.com/Eromera/erfnet_pytorch/blob/master/train/erfnet.py
+"""
 import torch
 import torch.nn as nn
 import torch.nn.init as init
 import torch.nn.functional as F
 
 from graphs.models.custom_blocks.erf_blocks import DownsamplerBlock, UpsamplerBlock, non_bottleneck_1d
+from graphs.weights_initializer import weights_init_normal
 
 
-# ERFNet
-class ERFModel(nn.Module):
-    def __init__(self, num_classes, encoder=None):  # use encoder to pass pretrained encoder
+class ERFNet(nn.Module):
+    def __init__(self, config, encoder=None):  # use encoder to pass pretrained encoder
         super().__init__()
+
+        self.config = config
+        self.num_classes = self.config.num_classes
 
         if encoder == None:
-            self.encoder = Encoder(num_classes)
+            self.encoder_flag = True
+            self.encoder_layers = nn.ModuleList()
+
+            # layer 1, downsampling
+            self.initial_block = DownsamplerBlock(self.config.input_channels, 16)
+
+            # layer 2, downsampling
+            self.encoder_layers.append(DownsamplerBlock(in_channel=16, out_channel=64))
+
+            # non-bottleneck 1d - layers 3 to 7
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=64, drop_rate=0.03, dilated=1))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=64, drop_rate=0.03, dilated=1))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=64, drop_rate=0.03, dilated=1))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=64, drop_rate=0.03, dilated=1))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=64, drop_rate=0.03, dilated=1))
+
+            # layer 8, downsampling
+            self.encoder_layers.append(DownsamplerBlock(in_channel=64, out_channel=128))
+
+            # non-bottleneck 1d - layers 9 to 16
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=2))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=4))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=8))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=16))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=2))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=4))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=8))
+            self.encoder_layers.append(non_bottleneck_1d(n_channel=128, drop_rate=0.3, dilated=16))
+
         else:
+            self.encoder_flag = False
             self.encoder = encoder
-        self.decoder = Decoder(num_classes)
 
-    def forward(self, input, only_encode=False):
-        if only_encode:
-            return self.encoder.forward(input, predict=True)
+        self.decoder_layers = nn.ModuleList()
+
+        self.decoder_layers.append(UpsamplerBlock(in_channel=128, out_channel=64))
+        self.decoder_layers.append(non_bottleneck_1d(n_channel=64, drop_rate=0, dilated=1))
+        self.decoder_layers.append(non_bottleneck_1d(n_channel=64, drop_rate=0, dilated=1))
+
+        self.decoder_layers.append(UpsamplerBlock(in_channel=64, out_channel=16))
+        self.decoder_layers.append(non_bottleneck_1d(n_channel=16, drop_rate=0, dilated=1))
+        self.decoder_layers.append(non_bottleneck_1d(n_channel=16, drop_rate=0, dilated=1))
+
+        self.output_conv = nn.ConvTranspose2d(in_channels=16, out_channels=self.num_classes,kernel_size=2, stride=2, padding=0, output_padding=0, bias=True)
+
+        # self.apply(weights_init_normal)
+
+    def forward(self, x):
+        if self.encoder_flag:
+            output = self.initial_block(x)
+
+            for layer in self.encoder_layers:
+                output = layer(output)
         else:
-            output = self.encoder(input)  # predict=False by default
-            return self.decoder.forward(output)
+            output = self.encoder(x)
 
-
-class Encoder(nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-        self.initial_block = DownsamplerBlock(3, 16)
-
-        self.layers = nn.ModuleList()
-
-        self.layers.append(DownsamplerBlock(16, 64))
-
-        for x in range(0, 5):  # 5 times
-            self.layers.append(non_bottleneck_1d(64, 0.03, 1))
-
-        self.layers.append(DownsamplerBlock(64, 128))
-
-        for x in range(0, 2):  # 2 times
-            self.layers.append(non_bottleneck_1d(128, 0.3, 2))
-            self.layers.append(non_bottleneck_1d(128, 0.3, 4))
-            self.layers.append(non_bottleneck_1d(128, 0.3, 8))
-            self.layers.append(non_bottleneck_1d(128, 0.3, 16))
-
-        # Only in encoder mode:
-        self.output_conv = nn.Conv2d(128, num_classes, 1, stride=1, padding=0, bias=True)
-
-    def forward(self, input, predict=False):
-        output = self.initial_block(input)
-
-        for layer in self.layers:
-            output = layer(output)
-
-        if predict:
-            output = self.output_conv(output)
-
-        return output
-
-
-class Decoder(nn.Module):
-    def __init__(self, num_classes):
-        super().__init__()
-
-        self.layers = nn.ModuleList()
-
-        self.layers.append(UpsamplerBlock(128, 64))
-        self.layers.append(non_bottleneck_1d(64, 0, 1))
-        self.layers.append(non_bottleneck_1d(64, 0, 1))
-
-        self.layers.append(UpsamplerBlock(64, 16))
-        self.layers.append(non_bottleneck_1d(16, 0, 1))
-        self.layers.append(non_bottleneck_1d(16, 0, 1))
-
-        self.output_conv = nn.ConvTranspose2d(16, num_classes, 2, stride=2, padding=0, output_padding=0, bias=True)
-
-    def forward(self, input):
-        output = input
-
-        for layer in self.layers:
+        for layer in self.decoder_layers:
             output = layer(output)
 
         output = self.output_conv(output)
 
         return output
-

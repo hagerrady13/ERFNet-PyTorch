@@ -1,7 +1,7 @@
 {
   "exp_name": "erfnet_exp_0",
   "agent": "ERFNetAgent",
-  "mode": "train",
+  "mode": "random",
 
   "cuda": true,
   "seed": 1337,
@@ -9,8 +9,12 @@
   "num_classes": 21,
   "ignore_index": 255,
 
+  "img_size": 256,
+  "input_channels": 3,
+
   "imagenet_nclasses": 1000,
 
+  "pretrained_encoder": true,
   "pretrained_model_path":"./pretrained_weights/erfnet_encoder_pretrained.pth.tar",
 
   "learning_rate": 5e-4,
@@ -28,7 +32,6 @@
   "checkpoint_file": "checkpoint.pth.tar",
 
   "data_loader": "VOCDataLoader",
-  "data_mode": "random",
   "data_root": "./data/pascal_voc_seg/",
   "data_loader_workers": 4,
   "pin_memory": true,
