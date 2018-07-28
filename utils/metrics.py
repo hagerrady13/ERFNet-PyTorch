@@ -35,30 +35,11 @@ class IOUMetric:
         return acc, acc_cls, iu, mean_iu, fwavacc
 
 
-def _fast_hist(label_pred, label_true, num_classes):
-    mask = (label_true >= 0) & (label_true < num_classes)
-    hist = np.bincount(
-        num_classes * label_true[mask].astype(int) +
-        label_pred[mask], minlength=num_classes ** 2).reshape(num_classes, num_classes)
-    return hist
-
-
-def evaluate(predictions, gts, num_classes):
-    hist = np.zeros((num_classes, num_classes))
-    for lp, lt in zip(predictions, gts):
-        hist += _fast_hist(lp.flatten(), lt.flatten(), num_classes)
-    # axis 0: gt, axis 1: prediction
-    acc = np.diag(hist).sum() / hist.sum()
-    acc_cls = np.diag(hist) / hist.sum(axis=1)
-    acc_cls = np.nanmean(acc_cls)
-    iu = np.diag(hist) / (hist.sum(axis=1) + hist.sum(axis=0) - np.diag(hist))
-    mean_iu = np.nanmean(iu)
-    freq = hist.sum(axis=1) / hist.sum()
-    fwavacc = (freq[freq > 0] * iu[freq > 0]).sum()
-    return acc, acc_cls, mean_iu, iu, fwavacc
-
-
 class AverageMeter:
+    """
+    Class to be an average meter for any average metric like loss, accuracy, etc..
+    """
+
     def __init__(self):
         self.value = 0
         self.avg = 0
@@ -84,6 +65,10 @@ class AverageMeter:
 
 
 class AverageMeterList:
+    """
+    Class to be an average meter for any average metric List structure like mean_iou_per_class
+    """
+
     def __init__(self, num_cls):
         self.cls = num_cls
         self.value = [0] * self.cls
@@ -108,3 +93,18 @@ class AverageMeterList:
     @property
     def val(self):
         return self.avg
+
+
+def cls_accuracy(output, target, topk=(1,)):
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    res = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(0)
+        res.append(correct_k / batch_size)
+    return res
