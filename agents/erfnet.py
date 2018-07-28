@@ -136,10 +136,11 @@ class ERFNetAgent:
         assert self.config.mode in ['train', 'test', 'random']
         try:
             if self.config.mode == 'test':
-                # self.validate()
+                self.validate()
                 self.test()
             else:
-                self.train()
+                self.validate()
+                # self.train()
 
         except KeyboardInterrupt:
             print("You have entered CTRL+C.. Wait to finalize")

@@ -1,7 +1,7 @@
 {
   "exp_name": "erfnet_exp_0",
   "agent": "ERFNetAgent",
-  "mode": "test",
+  "mode": "train",
 
   "cuda": true,
   "seed": 1337,
