@@ -48,9 +48,9 @@ def make_dataset(mode, root):
             item = (os.path.join(img_path, it + '.jpg'), os.path.join(mask_path, it + '.png'))
             items.append(item)
     elif mode == 'test' or mode == 'inference':
-        img_path = os.path.join(root, 'VOCdevkit (test)', 'VOC2012', 'JPEGImages')
+        img_path = os.path.join(root, 'VOCdevkit', 'VOC2012', 'JPEGImages')
         data_list = [l.strip('\n') for l in open(os.path.join(
-            root, 'VOCdevkit (test)', 'VOC2012', 'ImageSets', 'Segmentation', 'test.txt')).readlines()]
+            root, 'VOCdevkit', 'VOC2012', 'ImageSets', 'Segmentation', 'seg11valid.txt')).readlines()]
         for it in data_list:
             items.append((img_path, it))
     else:

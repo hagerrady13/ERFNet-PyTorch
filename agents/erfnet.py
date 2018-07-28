@@ -17,8 +17,13 @@ from torch.optim import lr_scheduler
 from tensorboardX import SummaryWriter
 from utils.metrics import AverageMeter, IOUMetric
 from utils.misc import print_cuda_statistics
+from utils.transform import Colorize
+from torchvision.transforms import ToPILImage
+
+from scipy.misc import imsave
 
 cudnn.benchmark = True
+
 
 class ERFNetAgent:
     """
@@ -39,6 +44,8 @@ class ERFNetAgent:
         self.model = ERF(self.config, pretrained_enc)
         # Create an instance from the data loader
         self.data_loader = VOCDataLoader(self.config)
+        self.color_transform = Colorize(self.config.num_classes)
+        self.image_transform = ToPILImage()
         # Create instance from the loss
         self.loss = CrossEntropyLoss(self.config)
         # Create instance from the optimizer
@@ -129,6 +136,7 @@ class ERFNetAgent:
         assert self.config.mode in ['train', 'test', 'random']
         try:
             if self.config.mode == 'test':
+                # self.validate()
                 self.test()
             else:
                 self.train()
@@ -247,8 +255,27 @@ class ERFNetAgent:
         return epoch_mean_iou, epoch_loss.val
 
     def test(self):
-        # TODO
-        pass
+        """
+        One epoch test
+        :return:
+        """
+        tqdm_batch = tqdm(self.data_loader.test_loader, total=self.data_loader.test_iterations,
+                          desc="Test at -{}-".format(self.current_epoch))
+
+        # set the model in training mode
+        self.model.eval()
+
+        for x_name, x in tqdm_batch:
+            if self.cuda:
+                x = x.pin_memory().cuda(async=self.config.async_loading)
+            x = Variable(x)
+            pred = self.model(x)
+            segmented_img = self.image_transform(self.color_transform(pred[0].cpu().max(0)[1].data.unsqueeze(0)))
+            # print(segmented_img.shape)
+            imsave(self.config.out_dir + x_name[0] + ".png", segmented_img)
+        tqdm_batch.close()
+
+        return
 
     def finalize(self):
         """

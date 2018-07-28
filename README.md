@@ -23,6 +23,14 @@ A PyTorch implementation for [ERFNet](http://www.robesafe.uah.es/personal/eduard
 ### Data Preparation:
 Pascal Voc 2012 data
 
+- Visit this, download SBD and PASCAL VOC 2012
+- Extract them, you will get benchmark_RELEASE and VOCdevkit folders.
+- Add file seg11valid.txt (download) into VOCdevkit/VOC2012/ImageSets/Segmentation
+- Put the benchmark_RELEASE and VOCdevkit folders in a folder called VOC
+- Removing the color map in ground truth annotations by using remove_gt_colormap.py
+- Then Check Voc_utils and voc2012.py for iterating on the VOC Dataset.
+
+
 ### Model:
 We are using the same model architecture as given in the paper.
 
