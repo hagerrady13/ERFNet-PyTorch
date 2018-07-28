@@ -7,6 +7,8 @@ import torch
 from torch.backends import cudnn
 from torch.autograd import Variable
 
+import logging
+
 from graphs.models.erfnet import ERF
 from graphs.models.erfnet_imagenet import ERFNet
 from datasets.voc2012 import VOCDataLoader
@@ -27,8 +29,9 @@ class ERFNetAgent:
 
     def __init__(self, config):
         self.config = config
+        self.logger = logging.getLogger("ERFNetAgent")
         # Create an instance from the Model
-        print("Loading encoder pretrained in imagenet...")
+        self.logger.info("Loading encoder pretrained in imagenet...")
         if self.config.pretrained_encoder:
             pretrained_enc = torch.nn.DataParallel(ERFNet(self.config.imagenet_nclasses)).cuda()
             pretrained_enc.load_state_dict(torch.load(self.config.pretrained_model_path)['state_dict'])
@@ -63,13 +66,14 @@ class ERFNetAgent:
         if self.cuda:
             torch.cuda.manual_seed_all(self.config.seed)
             self.device = torch.device("cuda")
-            print("Operation will be on *****GPU-CUDA***** ")
+            torch.cuda.set_device(self.config.gpu_device)
+            self.logger.info("Operation will be on *****GPU-CUDA***** ")
             print_cuda_statistics()
 
         else:
             self.device = torch.device("cpu")
             torch.manual_seed(self.config.seed)
-            print("Operation will be on *****CPU***** ")
+            self.logger.info("Operation will be on *****CPU***** ")
 
         self.model = self.model.to(self.device)
         self.loss = self.loss.to(self.device)
@@ -107,7 +111,7 @@ class ERFNetAgent:
     def load_checkpoint(self, filename):
         filename = self.config.checkpoint_dir + filename
         try:
-            print("Loading checkpoint '{}'".format(filename))
+            self.logger.info("Loading checkpoint '{}'".format(filename))
             checkpoint = torch.load(filename)
 
             self.current_epoch = checkpoint['epoch']
@@ -115,11 +119,11 @@ class ERFNetAgent:
             self.model.load_state_dict(checkpoint['state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
 
-            print("Checkpoint loaded successfully from '{}' at (epoch {}) at (iteration {})\n"
+            self.logger.info("Checkpoint loaded successfully from '{}' at (epoch {}) at (iteration {})\n"
                   .format(self.config.checkpoint_dir, checkpoint['epoch'], checkpoint['iteration']))
         except OSError as e:
-            print("No checkpoint exists from '{}'. Skipping...".format(self.config.checkpoint_dir))
-            print("**First time to train**")
+            self.logger.info("No checkpoint exists from '{}'. Skipping...".format(self.config.checkpoint_dir))
+            self.logger.info("**First time to train**")
 
     def run(self):
         """
@@ -134,7 +138,7 @@ class ERFNetAgent:
                 self.train()
 
         except KeyboardInterrupt:
-            print("You have entered CTRL+C.. Wait to finalize")
+            self.logger.info("You have entered CTRL+C.. Wait to finalize")
 
     def train(self):
         """
@@ -197,7 +201,7 @@ class ERFNetAgent:
         self.summary_writer.add_scalar("epoch_training/mean_iou", epoch_mean_iou, self.current_iteration)
         tqdm_batch.close()
 
-        print("Training Results at epoch-" + str(self.current_epoch) + " | " + "loss: " + str(
+        self.logger.info("Training Results at epoch-" + str(self.current_epoch) + " | " + "loss: " + str(
             epoch_loss.val) + " - acc-: " + str(
             epoch_acc) + "- mean_iou: " + str(epoch_mean_iou) + "\n iou per class: \n" + str(
             epoch_iou_class))
@@ -237,7 +241,7 @@ class ERFNetAgent:
         self.summary_writer.add_scalar("epoch_validation/loss", epoch_loss.val, self.current_iteration)
         self.summary_writer.add_scalar("epoch_validation/mean_iou", epoch_mean_iou, self.current_iteration)
 
-        print("Validation Results at epoch-" + str(self.current_epoch) + " | " + "loss: " + str(
+        self.logger.info("Validation Results at epoch-" + str(self.current_epoch) + " | " + "loss: " + str(
             epoch_loss.val) + " - acc-: " + str(
             epoch_acc) + "- mean_iou: " + str(epoch_mean_iou) + "\n iou per class: \n" + str(
             epoch_iou_class))
@@ -255,7 +259,7 @@ class ERFNetAgent:
         Finalize all the operations of the 2 Main classes of the process the operator and the data loader
         :return:
         """
-        print("Please wait while finalizing the operation.. Thank you")
+        self.logger.info("Please wait while finalizing the operation.. Thank you")
         self.save_checkpoint()
         self.summary_writer.export_scalars_to_json("{}all_scalars.json".format(self.config.summary_dir))
         self.summary_writer.close()
